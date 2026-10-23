@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Shopnar Shop – অ্যাডমিন প্যানেল</title>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>.wrap{max-width:1100px}.row2{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.row2 button{padding:6px 12px;font-size:14px}
+.chip{padding:6px 14px;border:1px solid var(--line);border-radius:99px;background:var(--card);color:var(--ink);font-size:14px}.chip.on{background:var(--pri);color:var(--pri-ink)}
+.tw{overflow-x:auto}.tw table td,.tw table th{white-space:nowrap}.tw tr.click{cursor:pointer}
+.nav{display:flex;flex-wrap:wrap}.nav button{flex:1 1 auto;padding:10px 14px}.bdg{display:inline-block;background:#e53935;color:#fff;border-radius:99px;font-size:12px;padding:1px 7px;margin-left:6px;font-weight:700}.mdl{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;z-index:60}.mbox{background:var(--card);border-radius:16px;padding:18px;width:min(92vw,360px);display:flex;flex-direction:column;gap:8px}.sm{font-size:13px;color:var(--mute)}.det{margin-top:12px}.pf input{width:100%}</style>
+</head>
+<body>
+<script>
+window.addEventListener('error',function(e){var a=document.getElementById('app');if(a&&!a.children.length){a.innerHTML='<div style="max-width:420px;margin:12vh auto;padding:20px;font-family:sans-serif;line-height:1.7"><h3>পেজ লোড হয়নি</h3><p style="color:#c0392b">'+String(e.message).replace(/</g,'&lt;')+'</p><p>সম্ভাব্য কারণ: supabase.js বা config.js ফাইল আপলোড হয়নি। ৬টি ফাইলই (index.html, admin.html, supabase.js, config.js, styles.css, logo.jpg) একই ফোল্ডারে আছে কিনা দেখুন, তারপর Ctrl+Shift+R চাপুন।</p></div>'}});
+</script>
+<div class="wrap" id="app"></div>
+<div id="toast" role="status"></div>
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script>
+var SB=supabase.createClient(CFG.url,CFG.key),EM='@reseller.shopnarshop.com',T=null,V='ov',F='pending',URLS={},Q='',SEL=null,ME=null;
+function $(s){return document.querySelector(s)}
+function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML}
+function tk(n){return '৳'+Math.round(n).toLocaleString('en-US')}
+function toast(m){var t=$('#toast');t.textContent=m;t.style.display='block';setTimeout(function(){t.style.display='none'},2600)}
+function bn(s){return String(s||'').replace(/[০-৯]/g,function(c){return '০১২৩৪৫৬৭৮৯'.indexOf(c)})}
+function ph(s){var d=bn(s).replace(/\D/g,'');if(d.indexOf('880')===0&&d.length===13)d='0'+d.slice(3);if(d.length===10&&d[0]==='1')d='0'+d;return d}
+function dt(x){return x?new Date(x).toLocaleString('bn-BD',{dateStyle:'medium',timeStyle:'short'}):'—'}
+function loginV(msg){document.body.className='authpage';
+ $('#app').innerHTML='<div class="auth pf"><img class="lg lgc" src="logo.jpg" alt="Shopnar Shop"><h2 class="ttl">অ্যাডমিন লগইন</h2><label>মোবাইল নাম্বার</label><input id="lp" type="tel" inputmode="numeric"><label>পাসওয়ার্ড</label><input id="lw" type="password"><div class="err" id="er">'+esc(msg||'')+'</div><button class="full gbtn" onclick="doLogin()">লগইন</button></div>'}
+async function doLogin(){var p=ph($('#lp').value),w=$('#lw').value;
+ var r=await SB.auth.signInWithPassword({email:p+EM,password:w});
+ if(r.error)return $('#er').textContent='নাম্বার বা পাসওয়ার্ড ঠিক নয়';boot()}
+async function logout(){await SB.auth.signOut();loginV()}
+async function boot(){
+ var s=(await SB.auth.getSession()).data.session;if(!s)return loginV();
+ await load(s.user.id)}
+async function load(uid){
+ var q=function(t,o){return SB.from(t).select('*').order(o,{ascending:false})};
+ var r=await Promise.all([q('profiles','created_at'),q('products','created_at'),q('sales','created_at'),q('withdrawals','created_at'),q('login_history','logged_in_at')]);
+ var err=r.filter(function(x){return x.error})[0];if(err)return loginV('ডেটা লোড করা যায়নি: '+err.error.message);
+ T={pr:r[0].data,pd:r[1].data,sl:r[2].data,wd:r[3].data,lh:r[4].data};
+ var mk=await q('marketing_requests','created_at');T.mkErr=!!mk.error;T.mk=mk.error?[]:(mk.data||[]);
+ ME=T.pr.filter(function(p){return p.id===uid})[0];
+ if(!ME||ME.role!=='admin'){document.body.className='';$('#app').innerHTML='<div class="card" style="max-width:420px;margin:12vh auto;text-align:center"><h2>অ্যাক্সেস নেই</h2><p class="mute">এই একাউন্টটি অ্যাডমিন নয়।</p><button onclick="logout()">লগআউট</button></div>';return}
+ T.pm={};T.pr.forEach(function(p){T.pm[p.id]=p});
+ var paths=T.pd.map(function(p){return p.image_path});URLS={};
+ if(paths.length){var su=await SB.storage.from('product-images').createSignedUrls(paths,3600);(su.data||[]).forEach(function(x){URLS[x.path]=x.signedUrl})}
+ document.body.className='';render()}
+function bal(uid){var own={};T.pd.forEach(function(p){if(p.owner===uid)own[p.id]=1});
+ var e=T.sl.filter(function(s){return own[s.product_id]}).reduce(function(a,s){return a+ +s.reseller_amount},0);
+ var w=T.wd.filter(function(x){return x.user_id===uid&&x.status!=='rejected'}).reduce(function(a,x){return a+ +x.amount},0);return e-w}
+function render(){
+ var pc=T.pd.filter(function(p){return p.status==='pending'}).length,wc=T.wd.filter(function(w){return w.status==='pending'}).length,mc=T.mk.filter(function(m){return m.status==='submitted'}).length;
+ var tabs=[['ov','ওভারভিউ',0],['pd','প্রোডাক্ট',pc],['sl','সেল এন্ট্রি',0],['wd','উইথড্র',wc],['mk','মার্কেটিং',mc],['rs','রিসেলার',0]];
+ var v=V==='pd'?pdV():V==='sl'?slV():V==='wd'?wdV():V==='rs'?rsV():V==='mk'?mkV():ovV();
+ $('#app').innerHTML='<header><img class="lg" src="logo.jpg" alt=""><div><button class="sec" onclick="boot()">রিফ্রেশ</button> <button class="sec" onclick="logout()">লগআউট</button></div></header><div class="nav">'+tabs.map(function(t){return '<button class="'+(V===t[0]?'on':'')+'" onclick="V=\''+t[0]+'\';render()">'+t[1]+(t[2]?'<span class="bdg">'+t[2]+'</span>':'')+'</button>'}).join('')+'</div>'+v}
+function ovV(){var pp=T.pd.filter(function(p){return p.status==='pending'}).length,pw=T.wd.filter(function(w){return w.status==='pending'});
+ var sh=T.sl.reduce(function(a,s){return a+ +s.shopnar_amount},0),rp=T.pr.reduce(function(a,p){return a+(p.role==='reseller'?bal(p.id):0)},0);
+ return todayV()+'<div class="stats"><div class="stat"><small>মোট রিসেলার</small><b>'+T.pr.filter(function(p){return p.role==='reseller'}).length+'</b></div><div class="stat"><small>রিভিউয়ের অপেক্ষায় প্রোডাক্ট</small><b>'+pp+'</b></div><div class="stat"><small>উইথড্র অপেক্ষায়</small><b>'+pw.length+' ('+tk(pw.reduce(function(a,w){return a+ +w.amount},0))+')</b></div><div class="stat"><small>Shopnar-এর আয় (২০%)</small><b>'+tk(sh)+'</b></div><div class="stat"><small>রিসেলারদের কাছে দেনা</small><b>'+tk(rp)+'</b></div></div>'}
+function pdV(){var L=T.pd.filter(function(p){return p.status===F}),n={pending:'রিভিউ',approved:'অনুমোদিত',rejected:'বাতিল'};
+ return '<div class="row2" style="margin:0 0 12px">'+['pending','approved','rejected'].map(function(k){return '<button class="chip '+(F===k?'on':'')+'" onclick="F=\''+k+'\';render()">'+n[k]+' ('+T.pd.filter(function(p){return p.status===k}).length+')</button>'}).join('')+'</div>'
+ +(L.length?'<div class="pgrid">'+L.map(function(p){var o=T.pm[p.owner]||{},pf=p.sell_price-p.buy_price;
+  return '<div class="prod"><a href="'+esc(URLS[p.image_path]||'#')+'" target="_blank" rel="noopener"><img src="'+esc(URLS[p.image_path]||'')+'" alt=""></a><div><b>'+esc(p.code)+'</b> · '+esc(o.name)+' <span class="sm">'+esc(o.phone)+'</span><p style="margin:6px 0">'+esc(p.caption)+'</p>কেনা '+tk(p.buy_price)+' · বিক্রি '+tk(p.sell_price)+'<br>লাভ '+tk(pf)+' → রিসেলার '+tk(pf*.8)+' / Shopnar '+tk(pf*.2)
+  +(p.reject_reason?'<br><span class="sm">কারণ: '+esc(p.reject_reason)+'</span>':'')
+  +'<div class="row2">'+(p.status==='pending'?'<button onclick="setP('+p.id+',\'approved\')">অনুমোদন</button><button class="sec" onclick="rejP('+p.id+')">বাতিল</button>':'')+'<button class="sec" onclick="copyCap('+p.id+')">ক্যাপশন কপি</button><button class="sec" onclick="dl('+p.id+')">ছবি ডাউনলোড</button></div></div></div>'}).join('')+'</div>':'<div class="card">কিছু নেই</div>')}
+async function setP(id,st,why){var r=await SB.from('products').update({status:st,reviewed_at:new Date().toISOString(),reject_reason:why||null}).eq('id',id);
+ if(r.error)return toast(r.error.message);toast('হয়েছে');boot()}
+function rejP(id){var w=prompt('বাতিলের কারণ (রিসেলার দেখতে পাবে):');if(w===null)return;setP(id,'rejected',w||'শর্ত পূরণ হয়নি')}
+function copyCap(id){var p=T.pd.filter(function(x){return x.id===id})[0];
+ navigator.clipboard.writeText(p.caption+'\n\nপ্রোডাক্ট কোড: '+p.code).then(function(){toast('ক্যাপশন কপি হয়েছে')},function(){toast('কপি করা যায়নি')})}
+async function dl(id){var p=T.pd.filter(function(x){return x.id===id})[0];
+ try{var b=await (await fetch(URLS[p.image_path])).blob(),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=p.code+'.jpg';a.click()}catch(e){toast('ডাউনলোড হয়নি')}}
+function slV(){var L=T.pd.filter(function(p){return p.status==='approved'});
+ return L.length?'<div class="tw card"><table><tr><th>কোড</th><th>প্রোডাক্ট</th><th>রিসেলার</th><th>বিক্রি হয়েছে</th><th>সেল যোগ করুন</th></tr>'+L.map(function(p){var o=T.pm[p.owner]||{};
+  return '<tr><td>'+esc(p.code)+'</td><td>'+esc(p.caption.slice(0,30))+'</td><td>'+esc(o.name)+'</td><td>'+p.sold_count+'</td><td><input id="q'+p.id+'" type="number" min="1" value="1" style="width:70px;display:inline-block"> <button onclick="addSale('+p.id+')" style="padding:6px 12px">যোগ</button></td></tr>'}).join('')+'</table></div>':'<div class="card">কোনো অনুমোদিত প্রোডাক্ট নেই</div>'}
+async function addSale(id){var q=parseInt($('#q'+id).value,10);if(!q||q<1)return toast('সঠিক সংখ্যা দিন');
+ var r=await SB.from('sales').insert({product_id:id,quantity:q});if(r.error)return toast(r.error.message);toast('সেল যোগ হয়েছে');boot()}
+function wdV(){var L=T.wd.slice().sort(function(a,b){return (a.status==='pending'?0:1)-(b.status==='pending'?0:1)});
+ return L.length?'<div class="tw card"><table><tr><th>রিসেলার</th><th>মাধ্যম ও নাম্বার</th><th>টাকা</th><th>তারিখ</th><th>অবস্থা</th><th></th></tr>'+L.map(function(w){var o=T.pm[w.user_id]||{};
+  return '<tr><td>'+esc(o.name)+'</td><td>'+({bkash:'বিকাশ',nagad:'নগদ',rocket:'রকেট'}[w.method||'bkash'])+' · '+esc(w.bkash_number)+' <button class="sec" style="padding:2px 8px;font-size:12px" onclick="navigator.clipboard.writeText(\''+esc(w.bkash_number)+'\');toast(\'কপি হয়েছে\')">কপি</button></td><td>'+tk(w.amount)+'</td><td>'+dt(w.created_at)+'</td><td>'+{pending:'অপেক্ষায়',paid:'পেইড',rejected:'বাতিল'}[w.status]+'</td><td>'+(w.status==='pending'?'<button onclick="setW('+w.id+',\'paid\')" style="padding:6px 12px">পেইড মার্ক</button> <button class="sec" onclick="setW('+w.id+',\'rejected\')" style="padding:6px 12px">বাতিল</button>':'')+'</td></tr>'}).join('')+'</table></div>':'<div class="card">কোনো উইথড্র নেই</div>'}
+async function setW(id,st){if(!confirm(st==='paid'?'সিলেক্ট করা মাধ্যমে টাকা পাঠিয়েছেন তো? পেইড মার্ক করবেন?':'বাতিল করবেন?'))return;
+ var r=await SB.from('withdrawals').update({status:st,paid_at:st==='paid'?new Date().toISOString():null}).eq('id',id);
+ if(r.error)return toast(r.error.message);toast('হয়েছে');boot()}
+function rsV(){var q=Q.toLowerCase(),L=T.pr.filter(function(p){return p.role==='reseller'&&(!q||(p.name+p.phone).toLowerCase().indexOf(q)>-1)});
+ var s=SEL&&T.pm[SEL];
+ var last={};T.lh.forEach(function(h){if(!last[h.user_id])last[h.user_id]=h.logged_in_at});
+ return '<div class="row2" style="margin:0 0 12px"><input id="sq" placeholder="নাম বা নাম্বার খুঁজুন" value="'+esc(Q)+'" oninput="Q=this.value;rsKeep()" style="max-width:280px"><button class="sec" onclick="csv()">Excel/CSV ডাউনলোড</button></div>'
+ +'<div class="tw card"><table><tr><th>নাম</th><th>নাম্বার</th><th>জয়েন</th><th>শেষ লগইন</th><th>প্রোডাক্ট</th><th>ব্যালেন্স</th></tr>'+L.map(function(p){return '<tr class="click" onclick="SEL=\''+p.id+'\';render()"><td>'+esc(p.name)+'</td><td>'+esc(p.phone)+'</td><td>'+dt(p.created_at)+'</td><td>'+dt(last[p.id]||p.last_login_at)+'</td><td>'+T.pd.filter(function(x){return x.owner===p.id}).length+'</td><td>'+tk(bal(p.id))+'</td></tr>'}).join('')+'</table></div>'
+ +(s?'<div class="card det"><h2>'+esc(s.name)+'</h2><p>📞 '+esc(s.phone)+' · বিকাশ: '+esc(s.bkash_number||'—')+'<br>📍 '+esc(s.address)+'</p><b>লগইন ইতিহাস (শেষ ১৫)</b><ul class="pts">'+T.lh.filter(function(h){return h.user_id===s.id}).slice(0,15).map(function(h){return '<li>'+dt(h.logged_in_at)+' <span class="sm">'+esc((h.user_agent||'').slice(0,60))+'</span></li>'}).join('')+'</ul></div>':'')}
+function rsKeep(){var p=$('#sq').selectionStart;render();var e=$('#sq');e.focus();e.setSelectionRange(p,p)}
+function csv(){var rows=[['নাম','নাম্বার','ঠিকানা','বিকাশ','জয়েন','ব্যালেন্স']].concat(T.pr.filter(function(p){return p.role==='reseller'}).map(function(p){return [p.name,p.phone,p.address,p.bkash_number||'',p.created_at,Math.round(bal(p.id))]}));
+ var t='\ufeff'+rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"'}).join(',')}).join('\n');
+ var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/csv;charset=utf-8'}));a.download='resellers.csv';a.click()}
+/* ===== admin additions: today, marketing, block, reject reasons ===== */
+function isToday(t){if(!t)return false;return new Date(t).toDateString()===new Date().toDateString()}
+function todayV(){var qty=T.sl.filter(function(s){return isToday(s.created_at)}).reduce(function(a,s){return a+s.quantity},0),
+ paid=T.wd.filter(function(w){return w.status==='paid'&&isToday(w.paid_at)}).reduce(function(a,w){return a+ +w.amount},0),
+ req=T.wd.filter(function(w){return isToday(w.created_at)}).length,
+ pp=T.pd.filter(function(p){return p.status==='pending'}).length,
+ pw=T.wd.filter(function(w){return w.status==='pending'}),
+ pm=T.mk.filter(function(m){return m.status==='submitted'}).length;
+ return '<div class="card" style="margin-bottom:12px"><h2>আজকের হিসাব</h2><div class="stats" style="margin:0"><div class="stat"><small>আজ সেল (পিস)</small><b>'+qty+'</b></div><div class="stat"><small>আজ টাকা তোলা (পেইড)</small><b>'+tk(paid)+'</b></div><div class="stat"><small>আজ উইথড্র রিকোয়েস্ট</small><b>'+req+'</b></div><div class="stat"><small>পেন্ডিং প্রোডাক্ট</small><b>'+pp+'</b></div><div class="stat"><small>পেন্ডিং উইথড্র</small><b>'+pw.length+' ('+tk(pw.reduce(function(a,w){return a+ +w.amount},0))+')</b></div><div class="stat"><small>পেন্ডিং মার্কেটিং</small><b>'+pm+'</b></div></div></div>'}
+var RR=['ছবি ঝাপসা','দাম ঠিক নয়','ক্যাপশন অসম্পূর্ণ','নিষিদ্ধ বা অনুপযুক্ত পণ্য','অন্য কারণ…'];
+function rejP(id){var m=document.createElement('div');m.className='mdl';m.id='mdl';
+ m.innerHTML='<div class="mbox"><h3 style="margin:0 0 4px">বাতিলের কারণ</h3>'+RR.map(function(r,i){return '<button class="sec" onclick="rjGo('+id+','+i+')">'+r+'</button>'}).join('')+'<button class="sec" onclick="document.getElementById(\'mdl\').remove()">থাক</button></div>';document.body.appendChild(m)}
+function rjGo(id,i){var w=RR[i];document.getElementById('mdl').remove();
+ if(i===RR.length-1){w=prompt('কারণ লিখুন (রিসেলার দেখতে পাবে):');if(w===null)return;w=w||'শর্ত পূরণ হয়নি'}
+ setP(id,'rejected',w)}
+var MKS={submitted:'পেমেন্টের অপেক্ষায়',paid:'পেমেন্ট পাওয়া গেছে',running:'চলমান',done:'সম্পন্ন',cancelled:'বাতিল'};
+function mkV(){if(T.mkErr)return '<div class="card">মার্কেটিং টেবিল এখনো তৈরি হয়নি। Supabase-এ নতুন SQL Run করুন।</div>';
+ if(!T.mk.length)return '<div class="card">কোনো মার্কেটিং রিকোয়েস্ট নেই</div>';
+ return '<div class="tw card"><table><tr><th>রিসেলার</th><th>প্রোডাক্ট</th><th>প্ল্যাটফর্ম (ডলার)</th><th>মোট</th><th>দিন</th><th>টার্গেট ও বয়স</th><th>তারিখ</th><th>অবস্থা</th><th></th></tr>'+T.mk.map(function(m){
+  var o=T.pm[m.user_id]||{},p=T.pd.filter(function(x){return x.id===m.product_id})[0]||{},pl=Object.keys(m.platforms||{}).map(function(k){return k+' $'+m.platforms[k]}).join(', ');
+  var act=m.status==='submitted'?'<button style="padding:6px 12px" onclick="setMk('+m.id+',\'paid\')">পেমেন্ট পেয়েছি</button> <button class="sec" style="padding:6px 12px" onclick="setMk('+m.id+',\'cancelled\')">বাতিল</button>':m.status==='paid'?'<button style="padding:6px 12px" onclick="setMk('+m.id+',\'running\')">চলমান</button>':m.status==='running'?'<button style="padding:6px 12px" onclick="setMk('+m.id+',\'done\')">সম্পন্ন</button>':'';
+  return '<tr><td>'+esc(o.name)+' <span class="sm">'+esc(o.phone)+'</span></td><td>'+esc(p.code)+'</td><td>'+esc(pl)+'</td><td>$'+esc(m.total_usd)+'</td><td>'+m.days+'</td><td>'+esc(m.audience)+' · '+m.age_min+'-'+m.age_max+'</td><td>'+dt(m.created_at)+'</td><td>'+MKS[m.status]+'</td><td>'+act+'</td></tr>'}).join('')+'</table></div>'}
+async function setMk(id,st){if(!confirm('অবস্থা বদলাবেন?'))return;var r=await SB.from('marketing_requests').update({status:st}).eq('id',id);if(r.error)return toast(r.error.message);toast('হয়েছে');boot()}
+async function blk(id,flag){if(!confirm(flag?'এই রিসেলারকে ব্লক করবেন? সে আর লগইন বা কিছু করতে পারবে না।':'আনব্লক করবেন?'))return;
+ var r=await SB.rpc('admin_set_blocked',{target:id,flag:flag});if(r.error)return toast(r.error.message);toast('হয়েছে');boot()}
+function rsV(){var q=Q.toLowerCase(),L=T.pr.filter(function(p){return p.role==='reseller'&&(!q||(p.name+p.phone).toLowerCase().indexOf(q)>-1)});
+ var s=SEL&&T.pm[SEL],last={};T.lh.forEach(function(h){if(!last[h.user_id])last[h.user_id]=h.logged_in_at});
+ return '<div class="row2" style="margin:0 0 12px"><input id="sq" placeholder="নাম বা নাম্বার খুঁজুন" value="'+esc(Q)+'" oninput="Q=this.value;rsKeep()" style="max-width:280px"><button class="sec" onclick="csv()">Excel/CSV ডাউনলোড</button></div>'
+ +'<div class="tw card"><table><tr><th>নাম</th><th>নাম্বার</th><th>জয়েন</th><th>শেষ লগইন</th><th>প্রোডাক্ট</th><th>ব্যালেন্স</th><th>অবস্থা</th></tr>'+L.map(function(p){return '<tr class="click" onclick="SEL=\''+p.id+'\';render()"><td>'+esc(p.name)+'</td><td>'+esc(p.phone)+'</td><td>'+dt(p.created_at)+'</td><td>'+dt(last[p.id]||p.last_login_at)+'</td><td>'+T.pd.filter(function(x){return x.owner===p.id}).length+'</td><td>'+tk(bal(p.id))+'</td><td>'+(p.blocked?'<span style="color:#c0392b;font-weight:700">ব্লকড</span>':'সক্রিয়')+'</td></tr>'}).join('')+'</table></div>'
+ +(s?'<div class="card det"><h2>'+esc(s.name)+'</h2><p>📞 '+esc(s.phone)+' · বিকাশ/নগদ/রকেট: '+esc(s.bkash_number||'—')+'<br>📍 '+esc(s.address)+'</p><div class="row2"><button '+(s.blocked?'':'class="sec" ')+'onclick="blk(\''+s.id+'\','+(s.blocked?'false':'true')+')">'+(s.blocked?'আনব্লক করুন':'ব্লক করুন')+'</button></div><p></p><b>লগইন ইতিহাস (শেষ ১৫)</b><ul class="pts">'+T.lh.filter(function(h){return h.user_id===s.id}).slice(0,15).map(function(h){return '<li>'+dt(h.logged_in_at)+' <span class="sm">'+esc((h.user_agent||'').slice(0,60))+'</span></li>'}).join('')+'</ul></div>':'')}
+
+boot();
+</script>
+</body>
+</html>
